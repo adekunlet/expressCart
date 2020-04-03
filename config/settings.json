@@ -23,15 +23,25 @@
     "theme": "Cloth",
     "trackStock": false,
     "orderHook": "",
-    "availableLanguages": ["en", "it"],
+    "availableLanguages": [
+        "en",
+        "it"
+    ],
     "defaultLocale": "en",
     "maxQuantity": 25,
     "twitterHandle": "",
     "facebookAppId": "",
+    "productOrderBy": "date",
+    "productOrder": "descending",
     "modules": {
         "enabled": {
             "shipping": "shipping-basic",
             "discount": "discount-voucher"
+        },
+        "loaded": {
+            "shipping": {},
+            "discount": {}
         }
-    }
+    },
+    "showRelatedProducts": true
 }

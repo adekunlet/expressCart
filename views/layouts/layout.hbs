@@ -22,6 +22,7 @@
         <meta name="description" content="{{snip config.cartDescription}}">
         {{/if}}
         {{/if}}
+        <meta name="csrfToken" content="{{csrfToken}}">
 		<meta name="keywords" content="{{config.cartTitle}}">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha256-L/W5Wfqfa0sdBNIKN9cG6QA5F2qx4qICmU2VgLruv9Y=" crossorigin="anonymous" />
         <link rel="stylesheet" href="/stylesheets/pushy{{config.env}}.css">
@@ -29,7 +30,6 @@
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/gijgo/1.9.13/combined/css/gijgo.min.css" integrity="sha256-bH0WSMuCFoG/dxeox/5aOWmaZl729yDg4ylckwSRTfU=" crossorigin="anonymous" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.20.2/codemirror.min.css" integrity="sha256-MdzaXfGXzZdeHw/XEV2LNNycipsLk4uZ0FYzO3hbuvI=" crossorigin="anonymous" />
         {{/if}}
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/all.min.css" integrity="sha256-+N4/V/SbAFiW1MPBCXnfnP9QSN3+Keu+NlB+0ev/YKQ=" crossorigin="anonymous" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-tokenfield/0.12.0/css/bootstrap-tokenfield.min.css" integrity="sha256-4qBzeX420hElp9/FzsuqUNqVobcClz1BjnXoxUDSYQ0=" crossorigin="anonymous" />
         <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
         <link rel="stylesheet" href="/stylesheets/codemirror-style.min.css">
@@ -47,6 +47,7 @@
         <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.20.2/mode/css/css.min.js" integrity="sha256-D5oJ11cOmRhXSYWELwG2U/XYH3YveZJr9taRYLZ2DSM=" crossorigin="anonymous"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.20.2/mode/xml/xml.min.js" integrity="sha256-ERFGS58tayDq5kkyNwd/89iZZ+HglMH7eYXxG1hxTvA=" crossorigin="anonymous"></script>
         {{/if}}
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.25.0/feather.min.js" integrity="sha256-NvgyqkM9Vu1DLHkzxTxXQxZNdDymUlwhXcSJEqUfPiU=" crossorigin="anonymous"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/numeral.js/2.0.6/numeral.min.js" integrity="sha256-LlHVI5rUauudM5ZcZaD6hHPHKrA7CSefHHnKgq+/AZc=" crossorigin="anonymous"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.7/js/tether.min.js" integrity="sha256-4lietOiwRDBKx1goZZbRiwB06L+/bPYEGDIKZt82bgg=" crossorigin="anonymous"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/1000hz-bootstrap-validator/0.11.9/validator.min.js"></script>
@@ -106,6 +107,7 @@
         {{else}}
         <meta property="twitter:url" content="{{config.baseUrl}}" />
         {{/if}}
+        {{#unless result.productTitle}}
         <script type="application/ld+json">
             {
                 "@context": "https://schema.org/",
@@ -139,7 +141,7 @@
                 {{/if}}
             }
         </script>
-        
+        {{/unless}}
         <!-- SEO data -->
         {{~#if config.googleAnalytics}}{{{config.googleAnalytics}}}{{/if}}
         {{~#if config.customCss}}<style>{{{config.customCss}}}</style>{{/if}}
@@ -157,22 +159,24 @@
     {{else}}
     <body>
     {{/if}}
+        {{#unless admin}}
         <nav class="navbar navbar-expand-lg justify-content-between mainNavBar">
-            {{#if admin}}
-            <a class="navbar-brand" href="/admin"><img class="img-fluid" src="/images/logo-admin.png"></a>
+            <a class="navbar-brand" href="/">
+            {{#if @root.config.cartLogo}}
+            <img src="{{@root.config.cartLogo}}" class="img-fluid">
             {{else}}
-            <a class="navbar-brand" href="/">{{@root.config.cartTitle}}</a>
+            {{@root.config.cartTitle}}
             {{/if}}
+            </a>
             <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarMenu" aria-controls="navbarMenu" aria-expanded="false" aria-label="Toggle navigation">
-                <i class="fa fa-bars" aria-hidden="true"></i>
+                {{{feather 'menu'}}}
             </button>
             <div id="navbarText">
                 <ul class="navbar-nav ml-auto">
-                    {{#unless admin}}
                     {{#ifCond @root.config.enableLanguages "!=" false}}
                     <div class="dropdown d-none d-sm-block">
                         <button class="btn btn-primary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                            <i class="fas fa-globe-americas"></i>
+                            {{{feather 'globe'}}}
                         </button>
                         <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
                             {{#availableLanguages}}
@@ -181,23 +185,28 @@
                         </div>
                     </div>
                     {{/ifCond}}
-                    {{/unless}}
-                    {{#unless admin}}
-                        {{#if @root.session.cart}}
-                            <li class="nav-item"><a href="/checkout/cart" class="btn menu-btn"><i class="fa fa-shopping-cart" aria-hidden="true"></i> {{ @root.__ "Cart" }} <span class="badge badge-danger" id="cart-count">{{@root.session.totalCartItems}}</span></a></li>
-                            {{else}}
-                            <li class="nav-item"><a href="/checkout/cart" class="btn menu-btn"><i class="fa fa-shopping-cart" aria-hidden="true"></i> {{ @root.__ "Cart" }} <span class="badge badge-danger" id="cart-count">0</span></a></li>
-                        {{/if}}
-                    {{/unless}}
-                    {{#if admin}}
-                    {{#if @root.session.user}}
-                        <li class="nav-item"><a href="#" data-toggle="modal" data-target="#globalSearchModal" class="pad-right-15"><i class="fas fa-search"></i></a></li>
-                        <li class="nav-item"><a href="/admin/logout"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+                    {{#if @root.session.customerPresent}}
+                    <div class="dropdown d-none d-sm-block">
+                        <button class="btn dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            {{{feather 'user'}}}
+                        </button>
+                        <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                            <li><a class="dropdown-item" href="/customer/account">Account</a></li>
+                            <li><a class="dropdown-item" href="/customer/logout">Logout</a></li>
+                        </div>
+                    </div>
+                    {{else}}
+                        <li class="nav-item ml-3"><a href="/customer/account" class="btn">{{{feather 'user'}}}</a></li>
                     {{/if}}
+                    {{#if @root.session.cart}}
+                        <li class="nav-item"><a href="/checkout/cart" class="btn menu-btn">{{{feather 'shopping-cart'}}} {{ @root.__ "Cart" }} <span class="badge badge-danger" id="cart-count">{{@root.session.totalCartItems}}</span></a></li>
+                        {{else}}
+                        <li class="nav-item"><a href="/checkout/cart" class="btn menu-btn">{{{feather 'shopping-cart'}}}</i> {{ @root.__ "Cart" }} <span class="badge badge-danger" id="cart-count">0</span></a></li>
                     {{/if}}
                 </ul>
             </div>
         </nav>
+        {{/unless}}
         <div class="site-overlay"></div>
         {{#unless admin}}
             {{#ifCond page '!=' 'checkout'}}
@@ -205,7 +214,7 @@
                 <div id="cart" class="col-md-12 pad-left-12 top-pad-10 pushy pushy-right">
                     <div class="row {{checkout}}">
                         <div class="col-sm-12 text-right">
-                            <button class="pushy-link btn btn-primary" type="button">X</button>
+                            <button class="pushy-link btn btn-primary" type="button">{{{feather 'x'}}}</button>
                         </div>
                     </div>
                     <div class="row">
@@ -223,13 +232,9 @@
             {{/ifCond}}
             {{/ifCond}}
         {{/unless}}
-		<div class="container-fluid content-body" id="container">
+		<div class="container-fluid content-body h-100" id="container">
             <div class="row">
-                {{#if admin}}
-                    {{{body}}}
-                {{else}}
                 {{{body}}}
-                {{/if}}
             </div>
 		</div>
 		<input type="hidden" id="input_notify_message" value="{{message}}">
@@ -254,28 +259,12 @@
 		{{/if}}
         <script src="/javascripts/pushy.min.js"></script>
         {{#if admin}}
-        <div class="modal fade" id="globalSearchModal" tabindex="-1" role="dialog" aria-labelledby="globalSearchModal"
-            aria-hidden="true">
-            <div class="modal-dialog modal-lg" role="document">
-                <div class="modal-content global-search-modal-content">
-                    <div class="modal-header global-search-modal-header"></div>
-                    <div class="modal-body">
-                        <form>
-                            <div class="form-group global-search-form">
-                                <div class="input-group">
-                                    <div class="input-group-prepend">
-                                        <label class="input-group-text search-input-addon" for="global-search-value"><i class="fas fa-search"></i></label>
-                                    </div>
-                                    <input type="text" class="form-control form-control-lg" id="global-search-value">
-                                </div>
-                            </div>
-                        </form>
-                        <ul class="list-group col-12 invisible" id="global-search-results"></ul>
-                    </div>
-                </div>
-            </div>
-        </div>
+        {{> partials/globalSearchModal}}
+        {{> partials/validationModal}}
         {{/if}}
         {{> partials/confirmModal}}
+        <script>
+            feather.replace();
+        </script>
 	</body>
 </html>

@@ -1,6 +1,6 @@
 {
   "name": "express-cart",
-  "version": "1.1.16",
+  "version": "1.1.17",
   "description": "A fully functioning Node.js shopping cart with Stripe, PayPal and Authorize.net payments.",
   "private": false,
   "scripts": {
@@ -8,7 +8,7 @@
     "deploy": "gulp deploy",
     "testdata": "node lib/testdata.js",
     "test": "ava",
-    "dev": "nodemon app.js",
+    "dev": "gulp watch",
     "lint": "eslint ./"
   },
   "ava": {
@@ -28,6 +28,7 @@
   "dependencies": {
     "@adyen/api-library": "^2.1.7",
     "ajv": "^6.10.2",
+    "ajv-errors": "^1.0.1",
     "async": "^2.6.3",
     "axios": "^0.19.0",
     "bcryptjs": "^2.4.3",
@@ -37,12 +38,15 @@
     "connect-mongodb-session": "^2.2.0",
     "cookie-parser": "^1.4.4",
     "countries-list": "^2.5.0",
+    "csurf": "^1.11.0",
     "dotenv": "^8.2.0",
     "express": "^4.17.1",
     "express-handlebars": "^3.1.0",
     "express-rate-limit": "^5.0.0",
     "express-session": "^1.17.0",
+    "feather-icons": "^4.25.0",
     "glob": "^7.1.5",
+    "got": "^10.6.0",
     "gulp-less": "^4.0.1",
     "helmet": "^3.21.2",
     "html-entities": "^1.2.0",
@@ -84,6 +88,7 @@
     "gulp": "^4.0.2",
     "gulp-clean-css": "^3.10.0",
     "gulp-minify": "^3.1.0",
+    "gulp-nodemon": "^2.5.0",
     "gulp-rename": "^1.4.0",
     "less": "^3.10.3",
     "supertest": "^4.0.2"
@@ -97,12 +102,15 @@
     "ecommerce",
     "paypal",
     "stripe",
-    "authorise.net",
+    "authorize.net",
+    "blockonomics",
     "adyen",
     "instore",
     "lunr",
     "cart",
-    "shopping"
+    "shopping",
+    "payway",
+    "westpac"
   ],
   "author": "Mark Moffat",
   "homepage": "https://expresscart.markmoffat.com",

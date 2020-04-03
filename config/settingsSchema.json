@@ -73,11 +73,12 @@
         },
         "currencyISO": {
             "type": "string",
+            "enum": ["USD", "EUR", "GBP"],
             "default": "USD"
         },
         "paymentGateway": {
             "type": "string",
-            "enum": ["paypal", "stripe", "authorizenet", "adyen", "instore"]
+            "enum": ["paypal", "blockonomics", "stripe", "authorizenet", "adyen", "payway", "instore"]
         },
         "databaseConnectionString": {
             "type": "string"
@@ -123,6 +124,16 @@
         "facebookAppId": {
             "type": "string"
         },
+        "productOrderBy": {
+            "type": "string",
+            "enum": ["date", "title"],
+            "default": "date"
+        },
+        "productOrder": {
+            "type": "string",
+            "enum": ["descending", "ascending"],
+            "default": "descending"
+        },
         "modules": {
             "type": "object",
             "properties": {
@@ -142,6 +153,10 @@
                     "shipping": "shipping-basic"
                 }
             }
+        },
+        "showRelatedProducts": {
+            "type": "boolean",
+            "default": true
         }
     },
     "required": [

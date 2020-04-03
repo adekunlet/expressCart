@@ -44,6 +44,11 @@ html, body {
     border-bottom-left-radius: 4px;
 }
 
+.feather{
+    width: 16px;
+    height: 16px;
+}
+
 .dragable_item{
 	cursor: move;
 }
@@ -154,6 +159,10 @@ input[type=number]::-webkit-outer-spin-button {
 
 .thumbnail-image-container {
     height: 350px;
+}
+
+.img-thumbnail {
+    border: 0;
 }
 
 .product-title{
@@ -495,7 +504,7 @@ input.form-control.customerDetails{
 }
 
 .btn-warning, .btn-primary {
-    color: #ffffff;
+    color: #ffffff !important;
     background-color: @primary-btn-color;
     border-color: @primary-btn-color;
 }
@@ -550,6 +559,10 @@ a {
     height: 70px;
 }
 
+.pagination>li>a{
+    background-color: @primary-btn-color !important;
+}
+
 .page-item.disabled .page-link{
     color:#b7b7b7;
 }
@@ -557,6 +570,10 @@ a {
 .page-link {
     color: white;
     border: 0;
+}
+
+.page-link:hover {
+    color: @text-gray-color !important;
 }
 
 .navbar-default .navbar-toggle:hover, .navbar-default .navbar-toggle:focus {

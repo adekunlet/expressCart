@@ -46,27 +46,13 @@
                             <button class="btn btn-outline-success" id="addDiscountCode">{{ @root.__ "Apply" }}</button>
                         </div>
                         <div class="input-group-append">
-                            <button class="btn btn-outline-danger" id="removeDiscountCode"><i class="fa fa-times" aria-hidden="true"></i></button>
+                            <button class="btn btn-outline-danger" id="removeDiscountCode">{{{feather 'x'}}}</button>
                         </div>
                     </div>
                     {{/if}}
                     <form id="shipping-form" class="shipping-form" action="/{{config.paymentGateway}}/checkout_action{{@root.paymentType}}" method="post" role="form" data-toggle="validator" novalidate="false">
                     {{#if session.customerPresent}}
-                    {{#ifCond config.paymentGateway '==' 'paypal'}}
-                        {{> partials/payments/paypal}}
-                    {{/ifCond}}
-                    {{#ifCond config.paymentGateway '==' 'stripe'}}
-                        {{> partials/payments/stripe}}
-                    {{/ifCond}}
-                    {{#ifCond config.paymentGateway '==' 'authorizenet'}}
-                        {{> partials/payments/authorizenet}}
-                    {{/ifCond}}
-                    {{#ifCond config.paymentGateway '==' 'adyen'}}
-                        {{> partials/payments/adyen}}
-                    {{/ifCond}}
-                    {{#ifCond config.paymentGateway '==' 'instore'}}
-                        {{> partials/payments/instore}}
-                    {{/ifCond}}
+                    {{> (partial config.paymentGateway) }}
                     {{/if}}
                     </form>
                 </div>

@@ -1,6 +1,12 @@
 /* eslint-disable prefer-arrow-callback, no-var, no-tabs */
-/* globals showNotification, slugify, numeral */
+/* globals showNotification, slugify, numeral, moment, feather */
 $(document).ready(function (){
+    $.ajaxSetup({
+        headers: {
+            'csrf-token': $('meta[name="csrfToken"]').attr('content')
+        }
+    });
+
     $(document).on('click', '#btnGenerateAPIkey', function(e){
         e.preventDefault();
         $.ajax({
@@ -76,6 +82,10 @@ $(document).ready(function (){
         $('#product_optOptions').val('');
     });
 
+    $(document).on('click', '#btnSettingsUpdate', function(e){
+        $('#settingsForm').submit();
+    });
+
     // call update settings API
     $('#settingsForm').validator().on('submit', function(e){
         if(!e.isDefaultPrevented()){
@@ -110,6 +120,10 @@ $(document).ready(function (){
         .fail(function(msg){
             showNotification(msg.responseJSON.message, 'danger');
         });
+    });
+
+    $(document).on('click', '#btnUserAdd', function(e){
+        $('#userNewForm').submit();
     });
 
     $('#userNewForm').validator().on('submit', function(e){
@@ -149,6 +163,10 @@ $(document).ready(function (){
                 showNotification(msg.responseJSON.message, 'danger');
             });
         }
+    });
+
+    $(document).on('click', '#btnUserEdit', function(e){
+        $('#userEditForm').submit();
     });
 
     $('#userEditForm').validator().on('submit', function(e){
@@ -200,6 +218,12 @@ $(document).ready(function (){
                 showNotification(msg.message, 'success', false, '/admin/product/edit/' + msg.productId);
             })
             .fail(function(msg){
+                if(msg.responseJSON.length > 0){
+                    var errorMessages = validationErrors(msg.responseJSON);
+                    $('#validationModalBody').html(errorMessages);
+                    $('#validationModal').modal('show');
+                    return;
+                }
                 showNotification(msg.responseJSON.message, 'danger');
             });
         }
@@ -220,6 +244,7 @@ $(document).ready(function (){
                     productPrice: $('#productPrice').val(),
                     productPublished: $('#productPublished').val(),
                     productStock: $('#productStock').val(),
+                    productStockDisable: $('#productStockDisable').is(':checked'),
                     productDescription: $('#productDescription').val(),
                     productPermalink: $('#productPermalink').val(),
                     productOptions: $('#productOptions').val(),
@@ -232,6 +257,13 @@ $(document).ready(function (){
                 showNotification(msg.message, 'success', true);
             })
             .fail(function(msg){
+                if(msg.responseJSON.length > 0){
+                    var errorMessages = validationErrors(msg.responseJSON);
+                    console.log('errorMessages', errorMessages);
+                    $('#validationModalBody').html(errorMessages);
+                    $('#validationModal').modal('show');
+                    return;
+                }
                 showNotification(msg.responseJSON.message, 'danger');
             });
         }
@@ -767,14 +799,14 @@ function globalSearch(){
             searchValue: $('#global-search-value').val()
         }
     }).done((res) => {
-        $('#global-search').html('<i class="fal fa-search"></i>');
+        $('#global-search').html('<i class="feather" data-feather="search"></i>');
         let hasResult = false;
         res.customers.forEach((value) => {
             hasResult = true;
             const result = `
             <li class="list-group-item global-result text-center" data-url="/admin/customer/view/${value._id}">
                 <div class="row">
-                <div class="col global-result-type gr-click"><i class="fas fa-users"></i> Customer</div>
+                <div class="col global-result-type gr-click"><i class="feather" data-feather="user"></i> Customer</div>
                 <div class="col global-result-detail gr-click">${value.firstName} ${value.lastName}</div>
                 <div class="col global-result-detail gr-click">${value.email}</div>
                 </div>
@@ -787,8 +819,9 @@ function globalSearch(){
             const result = `
             <li class="list-group-item global-result text-center" data-url="/admin/order/view/${value._id}">
                 <div class="row">
-                    <div class="col global-result-type gr-click"><i class="fas fa-cube"></i> Order</div>
+                    <div class="col global-result-type gr-click"><i class="feather" data-feather="package"></i> Order</div>
                     <div class="col global-result-detail gr-click">${value.orderFirstname} ${value.orderLastname}</div>
+                    <div class="col global-result-detail gr-click">${moment(value.orderDate).format('YYYY/MM/DD')}</div>
                     <div class="col global-result-detail gr-click">${value.orderEmail}</div>
                 </div>
             </li>`;
@@ -800,7 +833,7 @@ function globalSearch(){
             const result =
             `<li class="list-group-item global-result text-center" data-url="/admin/product/edit/${value._id}">
                 <div class="row">
-                    <div class="col global-result-type gr-click"><i class="fas fa-box-open"></i> Product</div>
+                    <div class="col global-result-type gr-click"><i class="feather" data-feather="tag"></i> Product</div>
                     <div class="col global-result-detail gr-click">${value.productTitle}</div>
                     <div class="col global-result-detail gr-click">${$('#currencySymbol').val()}${numeral(value.productPrice).format('0.00')}</div>
                 </div>
@@ -810,6 +843,24 @@ function globalSearch(){
 
         if(hasResult === true){
             $('#global-search-results').removeClass('invisible');
+        }else{
+            const noResult = `<li class="list-group-item text-center">
+                <div class="row">
+                    <div class="col global-result-type gr-click">Nothing found</div>
+                </div>
+            </li>`;
+            $('#global-search-results').append(noResult);
+            $('#global-search-results').removeClass('invisible');
         }
+
+        feather.replace();
     });
+}
+
+function validationErrors(errors){
+    var errorMessage = '';
+    errors.forEach((value) => {
+        errorMessage += `<p>${value.dataPath.replace('/', '')} - <span class="text-danger">${value.message}<span></p>`;
+    });
+    return errorMessage;
 }

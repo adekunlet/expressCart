@@ -16,7 +16,8 @@ const {
     updateTotalCart,
     emptyCart,
     updateSubscriptionCheck,
-    getData,
+    paginateData,
+    getSort,
     addSitemapProducts,
     getCountryList
 } = require('../lib/common');
@@ -36,30 +37,45 @@ router.get('/payment/:orderId', async (req, res, next) => {
 
     // If stock management is turned on payment approved update stock level
     if(config.trackStock && req.session.paymentApproved){
-        order.orderProducts.forEach(async (product) => {
-            const dbProduct = await db.products.findOne({ _id: getId(product.productId) });
-            let newStockLevel = dbProduct.productStock - product.quantity;
-            if(newStockLevel < 1){
-                newStockLevel = 0;
-            }
-
-            // Update product stock
-            await db.products.updateOne({
-                _id: getId(product.productId)
-            }, {
-                $set: {
-                    productStock: newStockLevel
+        // Check to see if already updated to avoid duplicate updating of stock
+        if(order.productStockUpdated !== true){
+            Object.keys(order.orderProducts).forEach(async (productKey) => {
+                const product = order.orderProducts[productKey];
+                const dbProduct = await db.products.findOne({ _id: getId(product.productId) });
+                let newStockLevel = dbProduct.productStock - product.quantity;
+                if(newStockLevel < 1){
+                    newStockLevel = 0;
                 }
-            }, { multi: false });
-        });
+
+                // Update product stock
+                await db.products.updateOne({
+                    _id: getId(product.productId)
+                }, {
+                    $set: {
+                        productStock: newStockLevel
+                    }
+                }, { multi: false });
+
+                // Add stock updated flag to order
+                await db.orders.updateOne({
+                    _id: getId(order._id)
+                }, {
+                    $set: {
+                        productStockUpdated: true
+                    }
+                }, { multi: false });
+            });
+            console.info('Updated stock levels');
+        }
     }
 
     // If hooks are configured, send hook
     if(config.orderHook){
         await hooker(order);
     };
-
-    res.render(`${config.themeViews}payment-complete`, {
+    let paymentView = `${config.themeViews}payment-complete`;
+    if(order.orderPaymentGateway === 'Blockonomics') paymentView = `${config.themeViews}payment-complete-blockonomics`;
+    res.render(paymentView, {
         title: 'Payment complete',
         config: req.app.config,
         session: req.session,
@@ -214,6 +230,32 @@ router.get('/checkout/payment', async (req, res) => {
     });
 });
 
+router.get('/blockonomics_payment', (req, res, next) => {
+    const config = req.app.config;
+    let paymentType = '';
+    if(req.session.cartSubscription){
+        paymentType = '_subscription';
+    }
+// show bitcoin address and wait for payment, subscribing to wss
+
+    res.render(`${config.themeViews}checkout-blockonomics`, {
+        title: 'Checkout - Payment',
+        config: req.app.config,
+        paymentConfig: getPaymentConfig(),
+        session: req.session,
+        paymentPage: true,
+        paymentType,
+        cartClose: true,
+        cartReadOnly: true,
+        page: 'checkout-information',
+        countryList,
+        message: clearSessionValue(req.session, 'message'),
+        messageType: clearSessionValue(req.session, 'messageType'),
+        helpers: req.handlebars.helpers,
+        showFooter: 'showFooter'
+    });
+});
+
 router.post('/checkout/adddiscountcode', async (req, res) => {
     const config = req.app.config;
     const db = req.app.db;
@@ -296,6 +338,7 @@ router.post('/checkout/removediscountcode', async (req, res) => {
 router.get('/product/:id', async (req, res) => {
     const db = req.app.db;
     const config = req.app.config;
+    const productsIndex = req.app.productsIndex;
 
     const product = await db.products.findOne({ $or: [{ _id: getId(req.params.id) }, { productPermalink: req.params.id }] });
     if(!product){
@@ -317,11 +360,29 @@ router.get('/product/:id', async (req, res) => {
     // show the view
     const images = await getImages(product._id, req, res);
 
+    // Related products
+    let relatedProducts = {};
+    if(config.showRelatedProducts){
+        const lunrIdArray = [];
+        const productTags = product.productTags.split(',');
+        const productTitleWords = product.productTitle.split(' ');
+        const searchWords = productTags.concat(productTitleWords);
+        searchWords.forEach((word) => {
+            productsIndex.search(word).forEach((id) => {
+                lunrIdArray.push(getId(id.ref));
+            });
+        });
+        relatedProducts = await db.products.find({
+            _id: { $in: lunrIdArray, $ne: product._id }
+        }).limit(4).toArray();
+    }
+
     res.render(`${config.themeViews}product`, {
         title: product.productTitle,
         result: product,
         productOptions: productOptions,
         images: images,
+        relatedProducts,
         productDescription: stripHtml(product.productDescription),
         metaDescription: config.cartTitle + ' - ' + product.productTitle,
         config: config,
@@ -357,6 +418,12 @@ router.post('/product/updatecart', async (req, res, next) => {
         return;
     }
 
+    const product = await db.products.findOne({ _id: getId(cartItem.productId) });
+    if(!product){
+        res.status(400).json({ message: 'There was an error updating the cart', totalCartItems: Object.keys(req.session.cart).length });
+        return;
+    }
+
     // Calculate the quantity to update
     let productQuantity = cartItem.quantity ? cartItem.quantity : 1;
     if(typeof productQuantity === 'string'){
@@ -370,14 +437,8 @@ router.post('/product/updatecart', async (req, res, next) => {
         return;
     }
 
-    const product = await db.products.findOne({ _id: getId(req.session.cart[cartItem.cartId].productId) });
-    if(!product){
-        res.status(400).json({ message: 'There was an error updating the cart', totalCartItems: Object.keys(req.session.cart).length });
-        return;
-    }
-
     // If stock management on check there is sufficient stock for this product
-    if(config.trackStock){
+    if(config.trackStock && product.productStock){
         if(productQuantity > product.productStock){
             res.status(400).json({ message: 'There is insufficient stock of this product.', totalCartItems: Object.keys(req.session.cart).length });
             return;
@@ -487,40 +548,43 @@ router.post('/product/addtocart', async (req, res, next) => {
     }
 
     // If stock management on check there is sufficient stock for this product
-    if(config.trackStock && product.productStock){
-        // If there is more stock than total (ignoring held)
-        if(productQuantity > product.productStock){
-            return res.status(400).json({ message: 'There is insufficient stock of this product.' });
-        }
-
-        const stockHeld = await db.cart.aggregate(
-            {
-                $match: {
-                    cart: { $elemMatch: { productId: product._id.toString() } }
-                }
-            },
-            { $unwind: '$cart' },
-            {
-                $group: {
-                    _id: '$cart.productId',
-                    sumHeld: { $sum: '$cart.quantity' }
-                }
-            },
-            {
-                $project: {
-                    sumHeld: 1
-                }
-            }
-        ).toArray();
-
-        // If there is stock
-        if(stockHeld.length > 0){
-            const totalHeld = _.find(stockHeld, { _id: product._id.toString() }).sumHeld;
-            const netStock = product.productStock - totalHeld;
-
-            // Check there is sufficient stock
-            if(productQuantity > netStock){
+    if(config.trackStock){
+        // Only if not disabled
+        if(product.productStockDisable !== true){
+            // If there is more stock than total (ignoring held)
+            if(productQuantity > product.productStock){
                 return res.status(400).json({ message: 'There is insufficient stock of this product.' });
+            }
+
+            const stockHeld = await db.cart.aggregate(
+                {
+                    $match: {
+                        cart: { $elemMatch: { productId: product._id.toString() } }
+                    }
+                },
+                { $unwind: '$cart' },
+                {
+                    $group: {
+                        _id: '$cart.productId',
+                        sumHeld: { $sum: '$cart.quantity' }
+                    }
+                },
+                {
+                    $project: {
+                        sumHeld: 1
+                    }
+                }
+            ).toArray();
+
+            // If there is stock
+            if(stockHeld.length > 0){
+                const totalHeld = _.find(stockHeld, { _id: product._id.toString() }).sumHeld;
+                const netStock = product.productStock - totalHeld;
+
+                // Check there is sufficient stock
+                if(productQuantity > netStock){
+                    return res.status(400).json({ message: 'There is insufficient stock of this product.' });
+                }
             }
         }
     }
@@ -615,38 +679,38 @@ router.get('/search/:searchTerm/:pageNum?', (req, res) => {
     }
 
     Promise.all([
-        getData(req, pageNum, { _id: { $in: lunrIdArray } }),
+        paginateData(true, req, pageNum, 'products', { _id: { $in: lunrIdArray } }),
         getMenu(db)
     ])
-        .then(([results, menu]) => {
-            // If JSON query param return json instead
-            if(req.query.json === 'true'){
-                res.status(200).json(results.data);
-                return;
-            }
+    .then(([results, menu]) => {
+        // If JSON query param return json instead
+        if(req.query.json === 'true'){
+            res.status(200).json(results.data);
+            return;
+        }
 
-            res.render(`${config.themeViews}index`, {
-                title: 'Results',
-                results: results.data,
-                filtered: true,
-                session: req.session,
-                metaDescription: req.app.config.cartTitle + ' - Search term: ' + searchTerm,
-                searchTerm: searchTerm,
-                message: clearSessionValue(req.session, 'message'),
-                messageType: clearSessionValue(req.session, 'messageType'),
-                productsPerPage: numberProducts,
-                totalProductCount: results.totalProducts,
-                pageNum: pageNum,
-                paginateUrl: 'search',
-                config: config,
-                menu: sortMenu(menu),
-                helpers: req.handlebars.helpers,
-                showFooter: 'showFooter'
-            });
-        })
-        .catch((err) => {
-            console.error(colors.red('Error searching for products', err));
+        res.render(`${config.themeViews}index`, {
+            title: 'Results',
+            results: results.data,
+            filtered: true,
+            session: req.session,
+            metaDescription: req.app.config.cartTitle + ' - Search term: ' + searchTerm,
+            searchTerm: searchTerm,
+            message: clearSessionValue(req.session, 'message'),
+            messageType: clearSessionValue(req.session, 'messageType'),
+            productsPerPage: numberProducts,
+            totalProductCount: results.totalItems,
+            pageNum: pageNum,
+            paginateUrl: 'search',
+            config: config,
+            menu: sortMenu(menu),
+            helpers: req.handlebars.helpers,
+            showFooter: 'showFooter'
         });
+    })
+    .catch((err) => {
+        console.error(colors.red('Error searching for products', err));
+    });
 });
 
 // search products
@@ -668,7 +732,7 @@ router.get('/category/:cat/:pageNum?', (req, res) => {
     }
 
     Promise.all([
-        getData(req, pageNum, { _id: { $in: lunrIdArray } }),
+        paginateData(true, req, pageNum, 'products', { _id: { $in: lunrIdArray } }, getSort()),
         getMenu(db)
     ])
         .then(([results, menu]) => {
@@ -690,7 +754,7 @@ router.get('/category/:cat/:pageNum?', (req, res) => {
                 message: clearSessionValue(req.session, 'message'),
                 messageType: clearSessionValue(req.session, 'messageType'),
                 productsPerPage: numberProducts,
-                totalProductCount: results.totalProducts,
+                totalProductCount: results.totalItems,
                 pageNum: pageNum,
                 menuLink: _.find(sortedMenu.items, (obj) => { return obj.link === searchTerm; }),
                 paginateUrl: 'category',
@@ -750,7 +814,7 @@ router.get('/page/:pageNum', (req, res, next) => {
     const numberProducts = config.productsPerPage ? config.productsPerPage : 6;
 
     Promise.all([
-        getData(req, req.params.pageNum),
+        paginateData(true, req, req.params.pageNum, 'products', {}, getSort()),
         getMenu(db)
     ])
         .then(([results, menu]) => {
@@ -769,7 +833,7 @@ router.get('/page/:pageNum', (req, res, next) => {
                 metaDescription: req.app.config.cartTitle + ' - Products page: ' + req.params.pageNum,
                 config: req.app.config,
                 productsPerPage: numberProducts,
-                totalProductCount: results.totalProducts,
+                totalProductCount: results.totalItems,
                 pageNum: req.params.pageNum,
                 paginateUrl: 'page',
                 helpers: req.handlebars.helpers,
@@ -791,7 +855,7 @@ router.get('/:page?', async (req, res, next) => {
     // if no page is specified, just render page 1 of the cart
     if(!req.params.page){
         Promise.all([
-            getData(req, 1, {}),
+            paginateData(true, req, 1, 'products', {}, getSort()),
             getMenu(db)
         ])
             .then(([results, menu]) => {
@@ -810,7 +874,7 @@ router.get('/:page?', async (req, res, next) => {
                     messageType: clearSessionValue(req.session, 'messageType'),
                     config,
                     productsPerPage: numberProducts,
-                    totalProductCount: results.totalProducts,
+                    totalProductCount: results.totalItems,
                     pageNum: 1,
                     paginateUrl: 'page',
                     helpers: req.handlebars.helpers,
@@ -827,7 +891,7 @@ router.get('/:page?', async (req, res, next) => {
             return;
         }
         // lets look for a page
-        const page = db.pages.findOne({ pageSlug: req.params.page, pageEnabled: 'true' });
+        const page = await db.pages.findOne({ pageSlug: req.params.page, pageEnabled: 'true' });
         // if we have a page lets render it, else throw 404
         if(page){
             res.render(`${config.themeViews}page`, {

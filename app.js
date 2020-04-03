@@ -31,47 +31,19 @@ const ajv = new Ajv({ useDefaults: true });
 // get config
 const config = common.getConfig();
 
-const baseConfig = ajv.validate(require('./config/baseSchema'), config);
+const baseConfig = ajv.validate(require('./config/settingsSchema'), config);
 if(baseConfig === false){
     console.log(colors.red(`settings.json incorrect: ${ajv.errorsText()}`));
     process.exit(2);
 }
 
 // Validate the payment gateway config
-switch(config.paymentGateway){
-    case'paypal':
-        if(ajv.validate(require('./config/paypalSchema'), require('./config/paypal.json')) === false){
-            console.log(colors.red(`PayPal config is incorrect: ${ajv.errorsText()}`));
-            process.exit(2);
-        }
-        break;
-
-    case'stripe':
-        if(ajv.validate(require('./config/stripeSchema'), require('./config/stripe.json')) === false){
-            console.log(colors.red(`Stripe config is incorrect: ${ajv.errorsText()}`));
-            process.exit(2);
-        }
-        break;
-
-    case'authorizenet':
-        if(ajv.validate(require('./config/authorizenetSchema'), require('./config/authorizenet.json')) === false){
-            console.log(colors.red(`Authorizenet config is incorrect: ${ajv.errorsText()}`));
-            process.exit(2);
-        }
-        break;
-
-    case'adyen':
-        if(ajv.validate(require('./config/adyenSchema'), require('./config/adyen.json')) === false){
-            console.log(colors.red(`adyen config is incorrect: ${ajv.errorsText()}`));
-            process.exit(2);
-        }
-        break;
-    case'instore':
-        if(ajv.validate(require('./config/instoreSchema'), require('./config/instore.json')) === false){
-            console.log(colors.red(`instore config is incorrect: ${ajv.errorsText()}`));
-            process.exit(2);
-        }
-        break;
+if(ajv.validate(
+        require(`./config/payment/schema/${config.paymentGateway}`),
+        require(`./config/payment/config/${config.paymentGateway}`)) === false
+    ){
+    console.log(colors.red(`${config.paymentGateway} config is incorrect: ${ajv.errorsText()}`));
+    process.exit(2);
 }
 
 // require the routes
@@ -81,11 +53,9 @@ const product = require('./routes/product');
 const customer = require('./routes/customer');
 const order = require('./routes/order');
 const user = require('./routes/user');
-const paypal = require('./routes/payments/paypal');
-const stripe = require('./routes/payments/stripe');
-const authorizenet = require('./routes/payments/authorizenet');
-const adyen = require('./routes/payments/adyen');
-const instore = require('./routes/payments/instore');
+
+// Add the payment route
+const paymentRoute = require(`./lib/payments/${config.paymentGateway}`);
 
 const app = express();
 
@@ -126,39 +96,42 @@ handlebars = handlebars.create({
             }
             return total;
         },
+        partial: (provider) => {
+            return `partials/payments/${provider}`;
+        },
         perRowClass: (numProducts) => {
             if(parseInt(numProducts) === 1){
-                return'col-6 col-md-12 product-item';
+                return 'col-6 col-md-12 product-item';
             }
             if(parseInt(numProducts) === 2){
-                return'col-6 col-md-6 product-item';
+                return 'col-6 col-md-6 product-item';
             }
             if(parseInt(numProducts) === 3){
-                return'col-6 col-md-4 product-item';
+                return 'col-6 col-md-4 product-item';
             }
             if(parseInt(numProducts) === 4){
-                return'col-6 col-md-3 product-item';
+                return 'col-6 col-md-3 product-item';
             }
 
-            return'col-md-6 product-item';
+            return 'col-md-6 product-item';
         },
         menuMatch: (title, search) => {
             if(!title || !search){
-                return'';
+                return '';
             }
             if(title.toLowerCase().startsWith(search.toLowerCase())){
-                return'class="navActive"';
+                return 'class="navActive"';
             }
-            return'';
+            return '';
         },
         getTheme: (view) => {
-            return`themes/${config.theme}/${view}`;
+            return `themes/${config.theme}/${view}`;
         },
         formatAmount: (amt) => {
             if(amt){
                 return numeral(amt).format('0.00');
             }
-            return'0.00';
+            return '0.00';
         },
         amountNoDecimal: (amt) => {
             if(amt){
@@ -168,33 +141,33 @@ handlebars = handlebars.create({
         },
         getStatusColor: (status) => {
             switch(status){
-                case'Paid':
-                    return'success';
-                case'Approved':
-                    return'success';
-                case'Approved - Processing':
-                    return'success';
-                case'Failed':
-                    return'danger';
-                case'Completed':
-                    return'success';
-                case'Shipped':
-                    return'success';
-                case'Pending':
-                    return'warning';
+                case 'Paid':
+                    return 'success';
+                case 'Approved':
+                    return 'success';
+                case 'Approved - Processing':
+                    return 'success';
+                case 'Failed':
+                    return 'danger';
+                case 'Completed':
+                    return 'success';
+                case 'Shipped':
+                    return 'success';
+                case 'Pending':
+                    return 'warning';
                 default:
-                    return'danger';
+                    return 'danger';
             }
         },
         checkProductOptions: (opts) => {
             if(opts){
-                return'true';
+                return 'true';
             }
-            return'false';
+            return 'false';
         },
         currencySymbol: (value) => {
             if(typeof value === 'undefined' || value === ''){
-                return'$';
+                return '$';
             }
             return value;
         },
@@ -208,19 +181,19 @@ handlebars = handlebars.create({
             if(obj){
                 return JSON.stringify(obj);
             }
-            return'';
+            return '';
         },
         checkedState: (state) => {
             if(state === 'true' || state === true){
-                return'checked';
+                return 'checked';
             }
-            return'';
+            return '';
         },
         selectState: (state, value) => {
             if(state === value){
-                return'selected';
+                return 'selected';
             }
-            return'';
+            return '';
         },
         isNull: (value, options) => {
             if(typeof value === 'undefined' || value === ''){
@@ -242,24 +215,24 @@ handlebars = handlebars.create({
         },
         ifCond: (v1, operator, v2, options) => {
             switch(operator){
-                case'==':
-                    return(v1 === v2) ? options.fn(this) : options.inverse(this);
-                case'!=':
-                    return(v1 !== v2) ? options.fn(this) : options.inverse(this);
-                case'===':
-                    return(v1 === v2) ? options.fn(this) : options.inverse(this);
-                case'<':
-                    return(v1 < v2) ? options.fn(this) : options.inverse(this);
-                case'<=':
-                    return(v1 <= v2) ? options.fn(this) : options.inverse(this);
-                case'>':
-                    return(v1 > v2) ? options.fn(this) : options.inverse(this);
-                case'>=':
-                    return(v1 >= v2) ? options.fn(this) : options.inverse(this);
-                case'&&':
-                    return(v1 && v2) ? options.fn(this) : options.inverse(this);
-                case'||':
-                    return(v1 || v2) ? options.fn(this) : options.inverse(this);
+                case '==':
+                    return (v1 === v2) ? options.fn(this) : options.inverse(this);
+                case '!=':
+                    return (v1 !== v2) ? options.fn(this) : options.inverse(this);
+                case '===':
+                    return (v1 === v2) ? options.fn(this) : options.inverse(this);
+                case '<':
+                    return (v1 < v2) ? options.fn(this) : options.inverse(this);
+                case '<=':
+                    return (v1 <= v2) ? options.fn(this) : options.inverse(this);
+                case '>':
+                    return (v1 > v2) ? options.fn(this) : options.inverse(this);
+                case '>=':
+                    return (v1 >= v2) ? options.fn(this) : options.inverse(this);
+                case '&&':
+                    return (v1 && v2) ? options.fn(this) : options.inverse(this);
+                case '||':
+                    return (v1 || v2) ? options.fn(this) : options.inverse(this);
                 default:
                     return options.inverse(this);
             }
@@ -272,22 +245,22 @@ handlebars = handlebars.create({
         },
         paymentMessage: (status) => {
             if(status === 'Paid'){
-                return'<h2 class="text-success">Your payment has been successfully processed</h2>';
+                return '<h2 class="text-success">Your payment has been successfully processed</h2>';
             }
             if(status === 'Pending'){
                 const paymentConfig = common.getPaymentConfig();
                 if(config.paymentGateway === 'instore'){
-                    return`<h2 class="text-warning">${paymentConfig.resultMessage}</h2>`;
+                    return `<h2 class="text-warning">${paymentConfig.resultMessage}</h2>`;
                 }
-                return'<h2 class="text-warning">The payment for this order is pending. We will be in contact shortly.</h2>';
+                return '<h2 class="text-warning">The payment for this order is pending. We will be in contact shortly.</h2>';
             }
-            return'<h2 class="text-success">Your payment has failed. Please try again or contact us.</h2>';
+            return '<h2 class="text-danger">Your payment has failed. Please try again or contact us.</h2>';
         },
         paymentOutcome: (status) => {
             if(status === 'Paid' || status === 'Pending'){
-                return'<h5 class="text-warning">Please retain the details above as a reference of payment</h5>';
+                return '<h5 class="text-warning">Please retain the details above as a reference of payment</h5>';
             }
-            return'';
+            return '';
         },
         upperFirst: (value) => {
             if(value){
@@ -301,7 +274,7 @@ handlebars = handlebars.create({
             lvalue = parseFloat(lvalue);
             rvalue = parseFloat(rvalue);
 
-            return{
+            return {
                 '+': lvalue + rvalue,
                 '-': lvalue - rvalue,
                 '*': lvalue * rvalue,
@@ -311,15 +284,35 @@ handlebars = handlebars.create({
         },
         showCartButtons: (cart) => {
             if(!cart){
-                return'd-none';
+                return 'd-none';
             }
-            return'';
+            return '';
         },
         snip: (text) => {
-            if(text.length > 155){
+            if(text && text.length > 155){
                 return text.substring(0, 155) + '...';
             }
             return text;
+        },
+        fixTags: (html) => {
+            html = html.replace(/&gt;/g, '>');
+            html = html.replace(/&lt;/g, '<');
+            return html;
+        },
+        feather: (icon) => {
+            // eslint-disable-next-line keyword-spacing
+            return `<svg
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="feather feather-${icon}"
+                >
+                <use xlink:href="/dist/feather-sprite.svg#${icon}"/>
+            </svg>`;
         }
     }
 });
@@ -375,6 +368,7 @@ app.use(i18n.init);
 // serving static content
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname, 'views', 'themes')));
+app.use(express.static(path.join(__dirname, 'node_modules', 'feather-icons')));
 
 // Make stuff accessible to our router
 app.use((req, res, next) => {
@@ -388,18 +382,16 @@ app.use((req, res, next) => {
     next();
 });
 
-// setup the routes
+// Setup the routes
 app.use('/', index);
 app.use('/', customer);
 app.use('/', product);
 app.use('/', order);
 app.use('/', user);
 app.use('/', admin);
-app.use('/paypal', paypal);
-app.use('/stripe', stripe);
-app.use('/authorizenet', authorizenet);
-app.use('/adyen', adyen);
-app.use('/instore', instore);
+
+// Payment route
+app.use(`/${config.paymentGateway}`, paymentRoute);
 
 // catch 404 and forward to error handler
 app.use((req, res, next) => {
@@ -487,7 +479,7 @@ initDb(config.databaseConnectionString, async (err, db) => {
         try{
             await runIndexing(app);
         }catch(ex){
-            console.error(colors.red('Error setting up indexes:' + err));
+            console.error(colors.red('Error setting up indexes:' + ex.message));
         }
     }
 
@@ -499,7 +491,7 @@ initDb(config.databaseConnectionString, async (err, db) => {
             console.log(colors.green('expressCart running on host: http://localhost:' + app.get('port')));
         }
     }catch(ex){
-        console.error(colors.red('Error starting expressCart app:' + err));
+        console.error(colors.red('Error starting expressCart app:' + ex.message));
         process.exit(2);
     }
 });
